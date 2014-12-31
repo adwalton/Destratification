@@ -19,6 +19,7 @@
   24/8/2014 - Increased Top Temp Setpoint to 63C and reduced PID cooefficients to 60,0.05,0
   30/8/2014 - Added 'ripple' flash of all LEDs to indicate when midTemp is below alarm level
   3/9/2014 - Reduced "I" to 0.01 (was 0.05)
+  
  */
 
 // include the library code:
