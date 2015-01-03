@@ -28,7 +28,8 @@
   11/12/2014 - Confirmed P30 0I 0D settings using test code on prototype Arduino. Have now added code to change I to 0.01 when error is less than 1.5 degrees C
   16/12/2014 - Adjusted energy array and sample time to 40 samples 15S apart. Also increased 'temp steady' threshold from 0.01 to 0.03. Added backlight control for LCD - turn it off 
                when energy level is static (and unless cylinder is full
-  18/12/2014 - Adjusted energy samples to 60 at 10S intervals (total 10 mins). Reduced "P" from 30 to 25 to slow down boiler heating and reduce over shoot.       
+  18/12/2014 - Adjusted energy samples to 60 at 10S intervals (total 10 mins). Reduced "P" from 30 to 25 to slow down boiler heating and reduce over shoot.
+  03-01-2015 - Adjusted energy array to 6 at 10S intervals (total 1 min) 
  */
 
 // include the library code:
@@ -68,7 +69,7 @@ double bottomTemp;
 double relaySetPoint = 42; // middleTemp value at which relay will be energised and prevent further gas heating of the water
 float energy; // Variable to hold calculated energy above 15C that gives an indication of the total heat in the cylinder
 float maxEnergy = 8.2; // total capacity of the cylinder in kWh - used to halt destrat activity (Was 7.8)
-const unsigned nRecentEnergies = 60; //Number of recent energy values to store. MUST BE EVEN.
+const unsigned nRecentEnergies = 6; //Number of recent energy values to store. MUST BE EVEN.
 float recentEnergies[nRecentEnergies]; // Create array to store energy readings
 unsigned recentEnergiesIndex = 0; // initialise pointer to energy array
 unsigned recentEnergiesInterval = 10000; // time between successive energy readings (ms)
