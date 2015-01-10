@@ -30,6 +30,7 @@
                when energy level is static (and unless cylinder is full
   18/12/2014 - Adjusted energy samples to 60 at 10S intervals (total 10 mins). Reduced "P" from 30 to 25 to slow down boiler heating and reduce over shoot.
   03-01-2015 - Adjusted energy array to 24 at 10S intervals (total 4 mins). Also removed 2S delay from end of main loop
+  10/01/2015 - Stopped lighting up LCD when Energy is Low. Changed Low Energy LED Flash warning to only use Pump and Full LEDs
  */
 // include the library code:
 #include <PID_v1.h>
@@ -196,22 +197,22 @@ void loop() {
    lcd.print("*** WARNING ****");
    lcd.setCursor(0,1); // set to next line
    lcd.print("** TEMP IS LOW *");
-   lcd.backlight(); // turn backlight on
+   //lcd.backlight(); // turn backlight on
    //
-   // FLASH ALL LEDs to Indicate LOW TEMP
-   digitalWrite(offLEDPin,HIGH);
+   // FLASH Left Two LEDs to Indicate LOW TEMP
+   digitalWrite(offLEDPin,LOW);
    digitalWrite(pumpLEDPin,HIGH);
    digitalWrite(fullLEDPin,HIGH);
    delay(100);
-   digitalWrite(offLEDPin,LOW);
+   //digitalWrite(offLEDPin,LOW);
    digitalWrite(pumpLEDPin,LOW);
    digitalWrite(fullLEDPin,LOW);
    delay(100);
-   digitalWrite(offLEDPin,HIGH);
+   //digitalWrite(offLEDPin,LOW);
    digitalWrite(pumpLEDPin,HIGH);
    digitalWrite(fullLEDPin,HIGH);
    delay(100);
-   digitalWrite(offLEDPin,LOW);
+   //digitalWrite(offLEDPin,LOW);
    digitalWrite(pumpLEDPin,LOW);
    digitalWrite(fullLEDPin,LOW);
    delay(1000);
