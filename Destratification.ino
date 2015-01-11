@@ -248,7 +248,7 @@ void loop() {
       lcd.print(string);
       delay(2000);
     }
-    if(abs(oldAverageEnergy - newAverageEnergy) < 0.03) // If change in energy is below threshold consider the temperatures to be steady
+    if(abs(oldAverageEnergy - newAverageEnergy) < 0.02) // If change in energy is below threshold consider the temperatures to be steady
     {
       sprintf(string, "** Temp Steady *");
       lcd.noBacklight(); // turn off backlight when nothing is happening
