@@ -31,6 +31,7 @@
   18/12/2014 - Adjusted energy samples to 60 at 10S intervals (total 10 mins). Reduced "P" from 30 to 25 to slow down boiler heating and reduce over shoot.
   03-01-2015 - Adjusted energy array to 24 at 10S intervals (total 4 mins). Also removed 2S delay from end of main loop
   10/01/2015 - Stopped lighting up LCD when Energy is Low. Changed Low Energy LED Flash warning to only use Pump and Full LEDs
+  13/2/2015 - Increase energy array back up to 80 samples at 15S intervals = 20mins total 
  */
 // include the library code:
 #include <PID_v1.h>
@@ -69,10 +70,10 @@ double bottomTemp;
 double relaySetPoint = 42; // middleTemp value at which relay will be energised and prevent further gas heating of the water
 float energy; // Variable to hold calculated energy above 15C that gives an indication of the total heat in the cylinder
 float maxEnergy = 8.2; // total capacity of the cylinder in kWh - used to halt destrat activity (Was 7.8)
-const unsigned nRecentEnergies = 24; //Number of recent energy values to store. MUST BE EVEN.
+const unsigned nRecentEnergies = 80; //Number of recent energy values to store. MUST BE EVEN.
 float recentEnergies[nRecentEnergies]; // Create array to store energy readings
 unsigned recentEnergiesIndex = 0; // initialise pointer to energy array
-unsigned recentEnergiesInterval = 10000; // time between successive energy readings (ms)
+unsigned recentEnergiesInterval = 15000; // time between successive energy readings (ms)
 float newAverageEnergy = 0.0f; // variable to store calculated value of most recent energy average
 float oldAverageEnergy = 0.0f; // variable to store calculated value of earlier energy average
 float energyGradient = 0.0f; // variable to store calculated rate of change in energy over time 
