@@ -31,7 +31,8 @@
   18/12/2014 - Adjusted energy samples to 60 at 10S intervals (total 10 mins). Reduced "P" from 30 to 25 to slow down boiler heating and reduce over shoot.
   03-01-2015 - Adjusted energy array to 24 at 10S intervals (total 4 mins). Also removed 2S delay from end of main loop
   10/01/2015 - Stopped lighting up LCD when Energy is Low. Changed Low Energy LED Flash warning to only use Pump and Full LEDs
-  13/2/2015 - Increase energy array back up to 80 samples at 15S intervals = 20mins total 
+  13/2/2015 - Increase energy array back up to 80 samples at 15S intervals = 20mins total
+  01/06/2015 - Reduced Boiler PID proportional parameter from 25 to 20
  */
 // include the library code:
 #include <PID_v1.h>
@@ -94,7 +95,7 @@ void flashLED(); //function to flash LED on Arduino board
 // initialize the pump PID Loop
 PID myPID(&topTemp, &pumpSpeed, &Setpoint,60,0.01,0, REVERSE);
 // initialize the Boiler PID Loop
-PID boilerPID(&middleTemp, &boilerLevel, &relaySetPoint, 25, 0, 0, DIRECT); // error (degrees) * P = boilerLevel value
+PID boilerPID(&middleTemp, &boilerLevel, &relaySetPoint, 20, 0, 0, DIRECT); // error (degrees) * P = boilerLevel value
 //
 void setup() {
   // Set up pins for status LEDs
