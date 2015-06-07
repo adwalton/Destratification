@@ -93,7 +93,7 @@ float boilerPercent; // variable to hold % boiler level
 float calcTempFromReadValue(int readValue);
 void flashLED(); //function to flash LED on Arduino board
 // initialize the pump PID Loop
-PID myPID(&topTemp, &pumpSpeed, &Setpoint,60,0.01,0, REVERSE);
+PID myPID(&topTemp, &pumpSpeed, &Setpoint,200,0.01,0, REVERSE);
 // initialize the Boiler PID Loop
 PID boilerPID(&middleTemp, &boilerLevel, &relaySetPoint, 20, 0, 0, DIRECT); // error (degrees) * P = boilerLevel value
 //
@@ -155,19 +155,19 @@ void loop() {
   } 
   //Serial.println(" ");
   //Serial.print("now - windowStartTime = ");
-  Serial.print((now - windowStartTime));
+  //Serial.print((now - windowStartTime));
   //Serial.print("windowSize = ");
   //Serial.println(windowSize);
-  Serial.print(", ");
+  //Serial.print(", ");
   Serial.print(topTemp);
   Serial.print(", ");
   Serial.print(middleTemp);
   Serial.print(", ");
   Serial.print(bottomTemp);
   Serial.print(", ");
-  Serial.print(boilerPercent);
+  Serial.print(pumpSpeed);
   Serial.print(", ");
-  Serial.print(((energy/maxEnergy)*100));
+  Serial.println(((energy/maxEnergy)*100));
  //
  //************************************************
  //* turn the relay pin on/off based on pid output
@@ -183,8 +183,8 @@ void loop() {
       boilerOn = 60000;
     }
   } 
- Serial.print(", ");
- Serial.println(boilerOn);
+ //Serial.print(", ");
+ //Serial.println(boilerOn);
  // 
   if(now - windowStartTime > windowSize)
   { //time to shift the Relay Window
