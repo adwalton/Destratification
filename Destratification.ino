@@ -34,6 +34,7 @@
   13/2/2015 - Increase energy array back up to 80 samples at 15S intervals = 20mins total
   01/06/2015 - Reduced Boiler PID proportional parameter from 25 to 20
   21/8/2015 -  Reduced Boiler PID proportional parameter from 20 to 15
+  28/8/2015 - Reduced Pump TTop Setpoint to 60 degrees and Max energy to 8.0kWh
  */
 // include the library code:
 #include <PID_v1.h>
@@ -71,7 +72,7 @@ double middleTemp;
 double bottomTemp;
 double relaySetPoint = 42; // middleTemp value at which relay will be energised and prevent further gas heating of the water
 float energy; // Variable to hold calculated energy above 15C that gives an indication of the total heat in the cylinder
-float maxEnergy = 8.2; // total capacity of the cylinder in kWh - used to halt destrat activity (Was 7.8)
+float maxEnergy = 8.0; // total capacity of the cylinder in kWh - used to halt destrat activity (Was 7.8)
 const unsigned nRecentEnergies = 80; //Number of recent energy values to store. MUST BE EVEN.
 float recentEnergies[nRecentEnergies]; // Create array to store energy readings
 unsigned recentEnergiesIndex = 0; // initialise pointer to energy array
@@ -108,7 +109,7 @@ void setup() {
   windowStartTime = millis(); //initialise value for relay control
   //
   tempInput = analogRead(topTempPin); //read temperature value (no longer used
-  Setpoint = 63; // initilise temperature (in celsius) setpoint for destratification pump PID control algorithm
+  Setpoint = 60; // initilise temperature (in celsius) setpoint for destratification pump PID control algorithm
   //
   myPID.SetOutputLimits(minPumpSpeed, maxPumpSpeed); 
   myPID.SetMode(AUTOMATIC); // turn on the PID loop
