@@ -35,6 +35,7 @@
   01/06/2015 - Reduced Boiler PID proportional parameter from 25 to 20
   21/8/2015 -  Reduced Boiler PID proportional parameter from 20 to 15
   28/8/2015 - Reduced Pump TTop Setpoint to 60 degrees and Max energy to 8.0kWh
+  31/8/2015 - Reduced 'steady temperature' threshold from 0.02 to 0.01
  */
 // include the library code:
 #include <PID_v1.h>
@@ -252,7 +253,7 @@ void loop() {
       lcd.print(string);
       delay(2000);
     }
-    if(abs(oldAverageEnergy - newAverageEnergy) < 0.02) // If change in energy is below threshold consider the temperatures to be steady
+    if(abs(oldAverageEnergy - newAverageEnergy) < 0.01) // If change in energy is below threshold consider the temperatures to be steady
     {
       sprintf(string, "** Temp Steady *");
       lcd.noBacklight(); // turn off backlight when nothing is happening
