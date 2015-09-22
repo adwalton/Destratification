@@ -36,7 +36,8 @@
   21/8/2015 -  Reduced Boiler PID proportional parameter from 20 to 15
   28/8/2015 - Reduced Pump TTop Setpoint to 60 degrees and Max energy to 8.0kWh
   31/8/2015 - Reduced 'steady temperature' threshold from 0.02 to 0.01
-  14/09/2015 - Reduced Boiler PID proportional parameter from 15 to 5
+  14/09/2015 - Reduced Boiler PID proportional parameter from 15 to 2
+  22/09/2015 - Reduced Boiler PID proportional parameter from 2 to 0.5
  */
 // include the library code:
 #include <PID_v1.h>
@@ -99,7 +100,7 @@ void flashLED(); //function to flash LED on Arduino board
 // initialize the pump PID Loop
 PID myPID(&topTemp, &pumpSpeed, &Setpoint,200,0.01,0, REVERSE);
 // initialize the Boiler PID Loop
-PID boilerPID(&middleTemp, &boilerLevel, &relaySetPoint, 5, 0, 0, DIRECT); // error (degrees) * P = boilerLevel value
+PID boilerPID(&middleTemp, &boilerLevel, &relaySetPoint, 0.5, 0, 0, DIRECT); // error (degrees) * P = boilerLevel value
 //
 void setup() {
   // Set up pins for status LEDs
