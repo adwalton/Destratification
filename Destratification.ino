@@ -38,7 +38,8 @@
   31/8/2015 - Reduced 'steady temperature' threshold from 0.02 to 0.01
   14/09/2015 - Reduced Boiler PID proportional parameter from 15 to 2
   22/09/2015 - Reduced Boiler PID proportional parameter from 2 to 0.5
-  29/9/2015 - Added code for Immersion Power Relay control. Turns OFF power to immersion if cylinder energy exceeds Maxenergy
+  29/9/2015 - Added code for Immersion Power Relay control. Turns OFF power to immersion if cylinder energy exceeds Maxenergy. Also made change tp keep pump active all the time - so 
+              TTop should be held at 'Setpoint' temperature 
  */
 // include the library code:
 #include <PID_v1.h>
@@ -376,36 +377,34 @@ void loop() {
   analogWrite(meterPin,(energy / maxEnergy)*255); // set voltage output for 'fuel gauge' (NOTE: not currently implemented)
   //
   //if (energySteady = 0) //Execute pump control if energy level is not steady
-  //{
+  //
+  //  Run pump PID and output to pump driver pin
+  //
+      tempInput = analogRead(topTempPin);
+      myPID.Compute();
+      analogWrite(pumpPin,pumpSpeed);
+  //
+      if (pumpSpeed > minPumpSpeed) // flash pump LED when pump is running
+        {
+          flashLED();
+        }
+      else
+        {
+          digitalWrite(pumpLEDPin,LOW);
+        }
+  //
+  //  Set Cylinder Full LED if required
+  //
     if (energy < maxEnergy)
     {
       digitalWrite(fullLEDPin,LOW);
       flashEnergyLED (); // Flash Amber LED to indicate energy level
-      tempInput = analogRead(topTempPin);
-      myPID.Compute(); // this line moved into timed energy smoothing loop
-      analogWrite(pumpPin,pumpSpeed);
-  //
-        if (pumpSpeed > minPumpSpeed) // flash pump LED when pump is running
-        {
-          //digitalWrite(offLEDPin,LOW);
-          flashLED();
-        }
-        else
-        {
-          digitalWrite(pumpLEDPin,LOW);
-          //digitalWrite(offLEDPin,HIGH);
-        }
-     } // end of energy < max energy 
+    } // end of energy < max energy 
     else
     {
-    // cylinder has reached capacity, so take no destrat action, just light the full LED
-    digitalWrite(fullLEDPin,HIGH);
-    digitalWrite(offLEDPin,LOW);
-    pumpSpeed = 0; // Stop Pump
-    analogWrite(pumpPin,pumpSpeed);
+        // cylinder has reached capacity, so light the full LED
+        digitalWrite(fullLEDPin,HIGH);
     }
-//
-  //delay(2000);
 } // end of main Loop
 //
   // Function to ConvertADC Values to Degrees C
