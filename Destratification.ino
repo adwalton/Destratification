@@ -38,6 +38,7 @@
   31/8/2015 - Reduced 'steady temperature' threshold from 0.02 to 0.01
   14/09/2015 - Reduced Boiler PID proportional parameter from 15 to 2
   22/09/2015 - Reduced Boiler PID proportional parameter from 2 to 0.5
+  29/9/2015 - Added code for Immersion Power Relay control. Turns OFF power to immersion if cylinder energy exceeds Maxenergy
  */
 // include the library code:
 #include <PID_v1.h>
@@ -55,6 +56,7 @@ const int pumpLEDPin = 35; // Pin for driving pump active LED
 const int meterPin = 9; //PWM pin for 'fuel gauge' (NOT CURRENTLY USED)
 const int relayPin = 11; // Pin used to drive Central Heating Relay
 const int lowAlarm = 42; // % of energy below which warning is displayed
+const int immersionPin = 44; // Pin used for Immersion ON / OFF Relay
 //
 double Setpoint; //define Destratification pump PID setpoint variable
 double tempInput; // variable to be used for measured temperature value
@@ -108,6 +110,7 @@ void setup() {
   pinMode(fullLEDPin,OUTPUT);
   pinMode(offLEDPin,OUTPUT);
   pinMode(relayPin,OUTPUT);
+  pinMode(immersionPin,OUTPUT);
   //
   windowStartTime = millis(); //initialise value for relay control
   //
@@ -131,7 +134,18 @@ void setup() {
   }
 }
 void loop() {
-  
+  //
+  // Turn OFF Immersion Relay if Cyliner is 'full'
+  //
+  if(energy >= maxEnergy)
+   {
+     digitalWrite(immersionPin,HIGH);
+   } 
+  else
+   {
+     digitalWrite(immersionPin,LOW);
+   }
+  //
   //Set Gas Central Heating Override Relay
   //
   boilerPID.Compute();
