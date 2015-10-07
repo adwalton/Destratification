@@ -38,10 +38,13 @@
   31/8/2015 - Reduced 'steady temperature' threshold from 0.02 to 0.01
   14/09/2015 - Reduced Boiler PID proportional parameter from 15 to 2
   22/09/2015 - Reduced Boiler PID proportional parameter from 2 to 0.5
-  29/9/2015 - Added code for Immersion Power Relay control. Turns OFF power to immersion if cylinder energy exceeds Maxenergy. Also made change tp keep pump active all the time - so 
-              TTop should be held at 'Setpoint' temperature 
+  29/9/2015 - Added code for Immersion Power Relay control. Turns OFF power to immersion if cylinder newAverageEnergy exceeds maxEnergy. Also made change to keep pump active all the time - so 
+              TTop should be held at 'Setpoint' temperature. Setpoint reduced to 59C and maxEnergy reduced to 7.5kWh. Increased delay between samples used to calc average energy from 
+              15 to 300 Sec (i.e. 5 mins) and number to 12 (i.e. 1 hour)
+  30/10/2015 - Added smoothing function to temperature acquisition
+  07/10/2015  - Changed temperature smoothing to add rolling exponential average over numberTempSamples at tempSampleInterval (mS) 
  */
-// include the library code:
+// include the library code:-
 #include <PID_v1.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
@@ -60,7 +63,6 @@ const int lowAlarm = 42; // % of energy below which warning is displayed
 const int immersionPin = 44; // Pin used for Immersion ON / OFF Relay
 //
 double Setpoint; //define Destratification pump PID setpoint variable
-double tempInput; // variable to be used for measured temperature value
 double pumpSpeed = 0; //initialise pump PWM output variable
 double minPumpSpeed = 0; //minimum PWM value to be used for pump
 double maxPumpSpeed = 255; //maximum PWM value available
@@ -71,18 +73,37 @@ int middleADCValue = 0; //variable to store ADC value
 int bottomADCValue = 0; //variable to store ADC value
 int flashCount = 0; // Used in flash function to indicate pump speed
 int flashCountE = 0; //Used to flash function to indicate energy level
-int smoothingIndex = 10; // used to smooth temperature measurements
+//
+// Set up Temperature Smoothing and Averaging variables
+//
+double numberTempSamples = 5; // number of temperature samples used in rolling average calculation
+int tempSampleInterval = 20000; // Interval (mS) between successive rolling average calculations
+int lastTempSample; // 'Millis' reading when last rolling average samples were calculated
+float averageTopTemp;
+float averageMiddleTemp;
+float averageBottomTemp;
+float newAverageTopTemp;
+float newAverageMiddleTemp;
+float newAverageBottomTemp;
+//
+int smoothNo = 10; // Number of loops used in temp sensor smoothing
+const int smoothTime = 20; // mS delay between each smoothing ADC sample
+int count = 0; //loop counter for temperature measurement smoothing
+//
 // int energySteady = 0; // Used to inhibit pump if the energy is steady : 0 = energy changing, 1 = energy not changing
+double smoothTopTemp;
+double smoothMiddleTemp;
+double smoothBottomTemp;
 double topTemp;
 double middleTemp;
 double bottomTemp;
 double relaySetPoint = 42; // middleTemp value at which relay will be energised and prevent further gas heating of the water
 float energy; // Variable to hold calculated energy above 15C that gives an indication of the total heat in the cylinder
-float maxEnergy = 8.0; // total capacity of the cylinder in kWh - used to halt destrat activity (Was 7.8)
-const unsigned nRecentEnergies = 80; //Number of recent energy values to store. MUST BE EVEN.
+float maxEnergy = 7.5; // total capacity of the cylinder in kWh - used to trip immersion heater relay
+const unsigned nRecentEnergies = 12; //Number of recent energy values to store. MUST BE EVEN.
 float recentEnergies[nRecentEnergies]; // Create array to store energy readings
 unsigned recentEnergiesIndex = 0; // initialise pointer to energy array
-unsigned recentEnergiesInterval = 15000; // time between successive energy readings (ms)
+unsigned recentEnergiesInterval = 300000; // time between successive energy readings (ms)
 float newAverageEnergy = 0.0f; // variable to store calculated value of most recent energy average
 float oldAverageEnergy = 0.0f; // variable to store calculated value of earlier energy average
 float energyGradient = 0.0f; // variable to store calculated rate of change in energy over time 
@@ -101,7 +122,7 @@ float boilerPercent; // variable to hold % boiler level
 float calcTempFromReadValue(int readValue);
 void flashLED(); //function to flash LED on Arduino board
 // initialize the pump PID Loop
-PID myPID(&topTemp, &pumpSpeed, &Setpoint,200,0.01,0, REVERSE);
+PID myPID(&topTemp, &pumpSpeed, &Setpoint,200,0.01,0, REVERSE); // PID for Pump Control
 // initialize the Boiler PID Loop
 PID boilerPID(&middleTemp, &boilerLevel, &relaySetPoint, 0.5, 0, 0, DIRECT); // error (degrees) * P = boilerLevel value
 //
@@ -115,8 +136,7 @@ void setup() {
   //
   windowStartTime = millis(); //initialise value for relay control
   //
-  tempInput = analogRead(topTempPin); //read temperature value (no longer used
-  Setpoint = 60; // initilise temperature (in celsius) setpoint for destratification pump PID control algorithm
+  Setpoint = 59; // initilise temperature (in celsius) setpoint for destratification pump PID control algorithm
   //
   myPID.SetOutputLimits(minPumpSpeed, maxPumpSpeed); 
   myPID.SetMode(AUTOMATIC); // turn on the PID loop
@@ -138,7 +158,7 @@ void loop() {
   //
   // Turn OFF Immersion Relay if Cyliner is 'full'
   //
-  if(energy >= maxEnergy)
+  if(newAverageEnergy >= maxEnergy)
    {
      digitalWrite(immersionPin,HIGH);
    } 
@@ -179,15 +199,15 @@ void loop() {
   //Serial.print("windowSize = ");
   //Serial.println(windowSize);
   //Serial.print(", ");
-  Serial.print(topTemp);
-  Serial.print(", ");
-  Serial.print(middleTemp);
-  Serial.print(", ");
-  Serial.print(bottomTemp);
-  Serial.print(", ");
-  Serial.print(pumpSpeed);
-  Serial.print(", ");
-  Serial.println(((energy/maxEnergy)*100));
+  //Serial.print(topTemp);
+  //Serial.print(", ");
+  //Serial.print(middleTemp);
+  //Serial.print(", ");
+  //Serial.print(bottomTemp);
+  //Serial.print(", ");
+  //Serial.print(pumpSpeed);
+  //Serial.print(", ");
+  //Serial.println(((energy/maxEnergy)*100));
  //
  //************************************************
  //* turn the relay pin on/off based on pid output
@@ -237,7 +257,7 @@ void loop() {
    //digitalWrite(offLEDPin,LOW);
    digitalWrite(pumpLEDPin,LOW);
    digitalWrite(fullLEDPin,LOW);
-   delay(1000);
+   delay(100);
    lcd.clear();
   }
   else // do nothing
@@ -268,7 +288,7 @@ void loop() {
       lcd.backlight(); // turn backlight on, since cylinder is full
       lcd.setCursor(0,0);
       lcd.print(string);
-      delay(2000);
+      delay(1000);
     }
     if(abs(oldAverageEnergy - newAverageEnergy) < 0.01) // If change in energy is below threshold consider the temperatures to be steady
     {
@@ -334,14 +354,73 @@ void loop() {
   //
     //Serial.println(" kWh");
   //
-  topADCValue = analogRead(topTempPin);
-  topTemp = calcTempFromRead(topADCValue);
-  middleADCValue = analogRead(middleTempPin);
-  middleTemp = calcTempFromRead(middleADCValue);
-  bottomADCValue = analogRead(bottomTempPin);
-  bottomTemp = calcTempFromRead(bottomADCValue);
+  // Initialise values for smoothed temperature acquisition
+  //
+  count = 0;
+  topADCValue = 0;
+  middleADCValue = 0;
+  bottomADCValue = 0;
+  //
+  while (count < smoothNo)
+  {
+    topADCValue = topADCValue + analogRead(topTempPin);
+    delay(smoothTime);
+    middleADCValue = middleADCValue + analogRead(middleTempPin);
+    delay(smoothTime);
+    bottomADCValue = bottomADCValue + analogRead(bottomTempPin);
+    delay(smoothTime);
+    count = count + 1;
+  }
+  topADCValue = topADCValue / smoothNo;
+  middleADCValue = middleADCValue / smoothNo;
+  bottomADCValue = bottomADCValue / smoothNo;
+  //
+  // End of smoothed temperature acquisition
+  //
+  smoothTopTemp = calcTempFromRead(topADCValue);
+  smoothMiddleTemp = calcTempFromRead(middleADCValue);
+  smoothBottomTemp = calcTempFromRead(bottomADCValue);
+  //
+  // Update Rolling Average Temperatures and energy
+  //
+  newMillis = millis();
+  if (newMillis - lastTempSample > tempSampleInterval)
+  {
+  newAverageTopTemp = (averageTopTemp * ((numberTempSamples - 1)/(numberTempSamples))) + (smoothTopTemp / numberTempSamples);
+  newAverageMiddleTemp = (averageMiddleTemp * ((numberTempSamples - 1)/(numberTempSamples))) + (smoothMiddleTemp / numberTempSamples);
+  newAverageBottomTemp = (averageBottomTemp * ((numberTempSamples - 1)/(numberTempSamples))) + (smoothBottomTemp / numberTempSamples);
+  //
+  topTemp = newAverageTopTemp;
+  middleTemp = newAverageMiddleTemp;
+  bottomTemp = newAverageBottomTemp;
+  //
+  averageTopTemp = newAverageTopTemp;
+  averageMiddleTemp = newAverageMiddleTemp;
+  averageBottomTemp = newAverageBottomTemp;
+  //
+  lastTempSample = millis(); //Reset last sample time
+  //
+  Serial.print("smoothTopTemp = ");
+  Serial.print(smoothTopTemp);
+  Serial.print(" averageTopTemp = ");
+  Serial.print (averageTopTemp);
+  Serial.print(" newAverageTopTemp = ");
+  Serial.print (newAverageTopTemp);
+  Serial.print("  topTemp = ");
+  Serial.print(topTemp);
+  Serial.print(" smoothMiddleTemp = ");
+  Serial.print(smoothMiddleTemp);
+  Serial.print("  middleTemp = ");
+  Serial.print(middleTemp);
+  Serial.print(" smoothBottomTemp = ");
+  Serial.print(smoothBottomTemp);
+  Serial.print("  bottomTemp = ");
+  Serial.println(bottomTemp);
+  //
+  }
+  //
   energy = ((((topTemp + middleTemp + bottomTemp)/3)-15)*170000*4.183)/3.6/1000000;
-  
+  //
   newMillis = millis();
   if(newMillis - elapsedMillis > recentEnergiesInterval)
   {
@@ -359,12 +438,12 @@ void loop() {
     newAverageEnergy /= (float)nRecentEnergies * 0.5f;
     oldAverageEnergy /= (float)nRecentEnergies * 0.5f;
     energyGradient = (newAverageEnergy - oldAverageEnergy)/deltaTime;
-    
+  //  
     hoursUntilFull = (maxEnergy - energy) / (energyGradient * 3600000.0f);
     elapsedMillis = newMillis;
-    
-    //Print out array
-//    Serial.println("Recent energy levels");
+//    
+//  Print out array
+//  Serial.println("Recent energy levels");
     for(unsigned i = 0; i < nRecentEnergies-1; ++i)
     {
  //     Serial.print(recentEnergies[i]);
@@ -376,11 +455,8 @@ void loop() {
   }
   analogWrite(meterPin,(energy / maxEnergy)*255); // set voltage output for 'fuel gauge' (NOTE: not currently implemented)
   //
-  //if (energySteady = 0) //Execute pump control if energy level is not steady
-  //
   //  Run pump PID and output to pump driver pin
   //
-      tempInput = analogRead(topTempPin);
       myPID.Compute();
       analogWrite(pumpPin,pumpSpeed);
   //
