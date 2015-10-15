@@ -42,14 +42,22 @@
               TTop should be held at 'Setpoint' temperature. Setpoint reduced to 59C and maxEnergy reduced to 7.5kWh. Increased delay between samples used to calc average energy from 
               15 to 300 Sec (i.e. 5 mins) and number to 12 (i.e. 1 hour)
   30/10/2015 - Added smoothing function to temperature acquisition
-  07/10/2015  - Changed temperature smoothing to add rolling exponential average over numberTempSamples at tempSampleInterval (mS) 
+  07/10/2015  - Changed temperature smoothing to add rolling exponential average over numberTempSamples at tempSampleInterval (mS). Set initial average temps to 55C to stop boiler or 
+                pump starting after system reset
+  09/10/2015 - Added positive minimum delay time allowed between immersion heater control relay operations (immersionSwitchInterval). Value set to 5 mins (300000 mS). Tidied up LCD display 
+                cycling; including fixing situation where Pump Speed was not displayed when Low Temp warning was active
+  12/10/2015 - Reduced Boiler relay set point and "Low Temp" warning level to middleTemp = 41 (rather than 42C). Corrected data type for immersion switching delay to unsigned long (to match 
+                result from Millis() )  Reduce "p" component of Pump PID Loop from 200 to 100
+  14/10/2015 - Added Watchdog function              
  */
 // include the library code:-
+#include <avr/wdt.h> // WATCHDOG 
 #include <PID_v1.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Set the LCD I2C address
 //
+boolean onboardLED; // define flag for onboard LED status
 const int bottomTempPin = 8; // analog pin for bottom transducer
 const int middleTempPin = 9; // analog pin for middle transducer
 const int topTempPin = 10; // analog pin for top transducer
@@ -59,7 +67,7 @@ const int fullLEDPin = 33; // Pin for driving LED indicating that Cylinder is 'f
 const int pumpLEDPin = 35; // Pin for driving pump active LED
 const int meterPin = 9; //PWM pin for 'fuel gauge' (NOT CURRENTLY USED)
 const int relayPin = 11; // Pin used to drive Central Heating Relay
-const int lowAlarm = 42; // % of energy below which warning is displayed
+const int lowAlarm = 41; // % of energy below which warning is displayed
 const int immersionPin = 44; // Pin used for Immersion ON / OFF Relay
 //
 double Setpoint; //define Destratification pump PID setpoint variable
@@ -79,12 +87,14 @@ int flashCountE = 0; //Used to flash function to indicate energy level
 double numberTempSamples = 5; // number of temperature samples used in rolling average calculation
 int tempSampleInterval = 20000; // Interval (mS) between successive rolling average calculations
 int lastTempSample; // 'Millis' reading when last rolling average samples were calculated
-float averageTopTemp;
-float averageMiddleTemp;
-float averageBottomTemp;
-float newAverageTopTemp;
-float newAverageMiddleTemp;
-float newAverageBottomTemp;
+unsigned long immersionSwitchInterval = 300000; // minimum time allowed between switches of Immersion Heater control relay
+unsigned long lastImmersionSwitch; // Used to store time Immersion Relay was last switched
+float averageTopTemp = 55;
+float averageMiddleTemp = 55;
+float averageBottomTemp = 55;
+float newAverageTopTemp = 55;
+float newAverageMiddleTemp = 55;
+float newAverageBottomTemp = 55;
 //
 int smoothNo = 10; // Number of loops used in temp sensor smoothing
 const int smoothTime = 20; // mS delay between each smoothing ADC sample
@@ -94,16 +104,16 @@ int count = 0; //loop counter for temperature measurement smoothing
 double smoothTopTemp;
 double smoothMiddleTemp;
 double smoothBottomTemp;
-double topTemp;
-double middleTemp;
-double bottomTemp;
-double relaySetPoint = 42; // middleTemp value at which relay will be energised and prevent further gas heating of the water
+double topTemp = 55;
+double middleTemp = 55;
+double bottomTemp = 55;
+double relaySetPoint = 41; // middleTemp value at which relay will be energised and prevent further gas heating of the water
 float energy; // Variable to hold calculated energy above 15C that gives an indication of the total heat in the cylinder
 float maxEnergy = 7.5; // total capacity of the cylinder in kWh - used to trip immersion heater relay
-const unsigned nRecentEnergies = 12; //Number of recent energy values to store. MUST BE EVEN.
+const unsigned nRecentEnergies = 20; //Number of recent energy values to store. MUST BE EVEN.
 float recentEnergies[nRecentEnergies]; // Create array to store energy readings
 unsigned recentEnergiesIndex = 0; // initialise pointer to energy array
-unsigned recentEnergiesInterval = 300000; // time between successive energy readings (ms)
+unsigned recentEnergiesInterval = 30000; // time between successive energy readings (ms)
 float newAverageEnergy = 0.0f; // variable to store calculated value of most recent energy average
 float oldAverageEnergy = 0.0f; // variable to store calculated value of earlier energy average
 float energyGradient = 0.0f; // variable to store calculated rate of change in energy over time 
@@ -122,17 +132,19 @@ float boilerPercent; // variable to hold % boiler level
 float calcTempFromReadValue(int readValue);
 void flashLED(); //function to flash LED on Arduino board
 // initialize the pump PID Loop
-PID myPID(&topTemp, &pumpSpeed, &Setpoint,200,0.01,0, REVERSE); // PID for Pump Control
+PID myPID(&topTemp, &pumpSpeed, &Setpoint,100,0.01,0, REVERSE); // PID for Pump Control
 // initialize the Boiler PID Loop
 PID boilerPID(&middleTemp, &boilerLevel, &relaySetPoint, 0.5, 0, 0, DIRECT); // error (degrees) * P = boilerLevel value
 //
 void setup() {
+  wdt_enable(WDTO_8S); // WATCHDOG set to maximum of 8 Seconds
   // Set up pins for status LEDs
   pinMode(pumpLEDPin,OUTPUT);
   pinMode(fullLEDPin,OUTPUT);
   pinMode(offLEDPin,OUTPUT);
   pinMode(relayPin,OUTPUT);
   pinMode(immersionPin,OUTPUT);
+  pinMode(13,OUTPUT); // onboard LED
   //
   windowStartTime = millis(); //initialise value for relay control
   //
@@ -155,17 +167,27 @@ void setup() {
   }
 }
 void loop() {
+// Toggle Onboard LED each loop
+    onboardLED = !onboardLED;
+    digitalWrite(13,onboardLED);
+ // 
+  wdt_reset(); // WATCHDOG Reset
   //
-  // Turn OFF Immersion Relay if Cyliner is 'full'
+  // Switch Immersion Relay based on 'Full' energy level and using minimum time allowed between switches
   //
-  if(newAverageEnergy >= maxEnergy)
-   {
-     digitalWrite(immersionPin,HIGH);
-   } 
-  else
-   {
-     digitalWrite(immersionPin,LOW);
-   }
+  now = millis();
+  if (now - lastImmersionSwitch > immersionSwitchInterval)
+   { 
+    if(energy > maxEnergy)
+     {
+       digitalWrite(immersionPin,HIGH);
+     } 
+    else
+     {
+       digitalWrite(immersionPin,LOW);
+     }
+   lastImmersionSwitch = millis();
+  }   
   //
   //Set Gas Central Heating Override Relay
   //
@@ -257,13 +279,16 @@ void loop() {
    //digitalWrite(offLEDPin,LOW);
    digitalWrite(pumpLEDPin,LOW);
    digitalWrite(fullLEDPin,LOW);
-   delay(100);
+   delay(1000);
    lcd.clear();
   }
   else // do nothing
   {
   }
-  //lcd.autoscroll();
+ //
+ // DISPLAY TEMPERATURES
+ //
+ //lcd.autoscroll();
  // char string[30];
  // sprintf(string, "T:%2dC M:%2dC B:%2dC", (int)topTemp, (int)middleTemp, (int)bottomTemp);
   lcd.setCursor(0,0);
@@ -274,12 +299,18 @@ void loop() {
   lcd.setCursor(10,0);
   lcd.print("  ");
   lcd.print(bottomTemp);
-//  lcd.print(string);
+//  
+  lcd.setCursor(0,1); // set to second line
+//  
+// $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$    
+    char string[30];
+    sprintf(string, "Pump %2d%% Cap %2d%%", (int)(pumpSpeed * 100.0f / (maxPumpSpeed-minPumpSpeed)),(int)((energy/maxEnergy)*100)); // thia line was changed to replace "255.0f" with calc value
+    lcd.print(string);
 //
   if(hoursUntilFull == hoursUntilFull) //hoursUntilFull is not NAN
   {
     char string[30];
-    
+//
     delay(2000);
     lcd.setCursor(0, 0);
     if(energy >= maxEnergy)
@@ -288,12 +319,12 @@ void loop() {
       lcd.backlight(); // turn backlight on, since cylinder is full
       lcd.setCursor(0,0);
       lcd.print(string);
-      delay(1000);
+      delay(2000);
     }
     if(abs(oldAverageEnergy - newAverageEnergy) < 0.01) // If change in energy is below threshold consider the temperatures to be steady
     {
       sprintf(string, "** Temp Steady *");
-      lcd.noBacklight(); // turn off backlight when nothing is happening
+ //     lcd.noBacklight(); // turn off backlight when nothing is happening
 //      energySteady = 1; // set flag to inhibit pump operation
     }
     else if(hoursUntilFull > 0.0f)
@@ -458,7 +489,7 @@ void loop() {
   //  Run pump PID and output to pump driver pin
   //
       myPID.Compute();
-      analogWrite(pumpPin,pumpSpeed);
+      analogWrite(pumpPin,pumpSpeed); 
   //
       if (pumpSpeed > minPumpSpeed) // flash pump LED when pump is running
         {
@@ -499,6 +530,7 @@ void loop() {
     delay(200);
     flashCount = flashCount - 25.5;
   }
+  wdt_reset(); // WATCHDOG Reset
 } 
 void flashEnergyLED() // Function to flash pump LED when pump is running. 0 to 10 flashes according to speed value
 {
@@ -510,7 +542,8 @@ void flashEnergyLED() // Function to flash pump LED when pump is running. 0 to 1
     digitalWrite(offLEDPin,LOW);
     delay(200);
     flashCountE = flashCountE - 10; 
- }
+  }
+   wdt_reset(); // WATCHDOG Reset
 } 
   
 
