@@ -100,7 +100,7 @@ float newAverageTopTemp = 50;
 float newAverageMiddleTemp = 45;
 float newAverageBottomTemp = 40;
 //
-int smoothNo = 10; // Number of loops used in temp sensor smoothing
+int smoothNo = 6; // Number of loops used in temp sensor smoothing
 const int smoothTime = 20; // mS delay between each smoothing ADC sample
 int count = 0; //loop counter for temperature measurement smoothing
 //
@@ -115,7 +115,7 @@ double energy; // Variable to hold calculated energy above 15C that gives an ind
 double lastEnergyPercent; // Used to stop repeated lines being output to serial monitor
 float boilerPercent;
 float maxEnergy = 7.5; // total capacity of the cylinder in kWh - used to trip immersion heater relay
-const unsigned nRecentEnergies = 20; //Number of recent energy values to store. MUST BE EVEN.
+const unsigned nRecentEnergies = 10; //Number of recent energy values to store. MUST BE EVEN.
 float recentEnergies[nRecentEnergies]; // Create array to store energy readings
 unsigned recentEnergiesIndex = 0; // initialise pointer to energy array
 unsigned recentEnergiesInterval = 30000; // time between successive energy readings (ms)
@@ -225,7 +225,7 @@ void loop() {
   //
   energyPercent =(energy/maxEnergy)*100;
   //
-  if(abs(lastEnergyPercent - energyPercent) > 0.2) // Only print if energy has changed 
+  if(abs(lastEnergyPercent - energyPercent) > 0.1) // Only print if energy has changed 
   {
     Serial.print(millis());
     Serial.print(", ");
@@ -259,8 +259,6 @@ void loop() {
       boilerOn = 60000;
     }
   } 
- //Serial.print(", ");
- //Serial.println(boilerOn);
  // 
   if(now - windowStartTime > windowSize)
   { //time to shift the Relay Window
@@ -294,10 +292,7 @@ void loop() {
      lcd.noBacklight();
      delay(250);
      lcd.backlight(); // turn backlight on
-     lcd.clear();
-  }
-  else // do nothing
-  {
+   //  lcd.clear();
   }
  //
  // Display Temperatures
@@ -305,83 +300,118 @@ void loop() {
  //lcd.autoscroll();
  // char string[30];
  // sprintf(string, "T:%2dC M:%2dC B:%2dC", (int)topTemp, (int)middleTemp, (int)bottomTemp);
+ // lcd.clear();
   lcd.setCursor(0,0);
   lcd.print(topTemp);
-  lcd.setCursor(5,0);
-  lcd.print(" ");
+  lcd.setCursor(4,0);
+  lcd.print("  ");
   lcd.print(middleTemp);
   lcd.setCursor(10,0);
   lcd.print("  ");
   lcd.print(bottomTemp);
+  lcd.setCursor(0,1);
+  lcd.print("Energy =        ");
+  lcd.setCursor(9,1);
+  lcd.print(int(energyPercent));
+  lcd.print("%");
+  delay(1000);
 //  
 // Display Pump Speed (if it's Running), together with Capacity Level
 //
-  if (pumpSpeed > minPumpSpeed)
-    {
-      lcd.setCursor(0,1); // set to second line
-      char string[30];
-      sprintf(string, "Pmp %2d%% Cap %2d%%", (int)(pumpSpeed * 100.0f / (maxPumpSpeed-minPumpSpeed)),(int)((energy/maxEnergy)*100)); // thia line was changed to replace "255.0f" with calc value
-      lcd.print(string);
-    } 
+//  if (pumpSpeed > minPumpSpeed)
+//    {
+//      lcd.clear();
+//      lcd.setCursor(0,1); // set to second line
+//      char string[30];
+//      sprintf(string, "Pmp %2d%% Cap %2d%%", (int)(pumpSpeed * 100.0f / (maxPumpSpeed-minPumpSpeed)),(int)((energy/maxEnergy)*100)); // thia line was changed to replace "255.0f" with calc value
+//      lcd.print(string);
+//        lcd.print("Pump ON         ");
+//        lcd.setCursor(9,1);
+//        lcd.print(int(pumpSpeed * 100.0f / (maxPumpSpeed-minPumpSpeed)));
+//        lcd.print("%");
+//        delay(1000);
+//    } 
 //
-  if(hoursUntilFull == hoursUntilFull) //hoursUntilFull is not NAN
-  {
-    char string[30];
+//  if(hoursUntilFull == hoursUntilFull) //hoursUntilFull is not NAN
+//  {
+//    char string[30];
 //
-    delay(2000);
-    lcd.setCursor(0, 0);
+//    delay(2000);
+//    lcd.clear();
+//    lcd.setCursor(0, 0);
     if(energy >= maxEnergy)
     {
-      sprintf(string, "**Tank is Full**");
+//      sprintf(string, "**Tank is Full**");
+//      lcd.clear();
       lcd.setCursor(0,0);
-      lcd.print(string);
-      delay(2000);
+//      lcd.print(string);
+      lcd.print("**TANK IS FULL**");
+      delay(1000);
     }
-    if(abs(oldAverageEnergy - newAverageEnergy) < 0.007) // If change in energy is below threshold consider the temperatures to be steady
+    if(abs(oldAverageEnergy - newAverageEnergy) < 0.02) // If change in energy is below threshold consider the temperatures to be steady
     {
-      sprintf(string, "** Temp Steady *");
+      lcd.setCursor(0,1);
+      if(newAverageEnergy > oldAverageEnergy)
+      {
+       lcd.print(" WARMING Slowly ");
+      }
+      else
+      {
+       lcd.print(" COOLING Slowly "); 
+      }
+       delay(1000);
     }
     else if(hoursUntilFull > 0.0f)
     {
-      char number[10];
-      dtostrf(hoursUntilFull, 3, 1, number);
-      sprintf(string, "%s Hrs to Full ", number);
+      lcd.setCursor(0,1);
+      lcd.print("                ");
+      lcd.setCursor(0,1);
+      lcd.print(int(60 * hoursUntilFull));
+      lcd.print(" mins to Full");
+      delay(1000);
     }
     else if(hoursUntilFull < 0.0f)
     {
-      char number[10];
-      dtostrf(-hoursUntilFull, 3, 1, number);
-      sprintf(string, "%s Hrs to Empty", number);
-      lcd.backlight(); // turn backlight on, since energy level is changing
+     lcd.setCursor(0,1);
+     lcd.print("                ");
+      lcd.setCursor(0,1);
+      lcd.print(abs(int(50 * hoursUntilFull)));
+      lcd.print(" mins to Empty");
+      delay(1000);
     }
     else //hoursUntilFull == 0.0f
     {
-      sprintf(string, "**Inf Gradient**");
+      lcd.clear();
+      lcd.print("**Inf Gradient**");
     }
-    lcd.print(string);
-  }
 //  
   lcd.setCursor(0,1); // Set to second line
 //  
-//  if (pumpSpeed > minPumpSpeed)
-//  {
+  if (pumpSpeed > minPumpSpeed)
+  {
 //    char string[30];
 //    sprintf(string, "Pmp %2d%% Cap %2d%%", (int)(pumpSpeed * 100.0f / (maxPumpSpeed-minPumpSpeed)),(int)((energy/maxEnergy)*100)); // thia line was changed to replace "255.0f" with calc value
 //    lcd.print(string);
-//  }
-//  else
-//  {
+      lcd.print("Pump ON         ");
+      lcd.setCursor(9,1);
+      lcd.print(int(pumpSpeed * 100.0f / (maxPumpSpeed-minPumpSpeed)));
+      lcd.print("%");
+      delay(1000);
+  }
+  else
+  {
   //
   //  Print estimated energy level and % of 'full' capacity
   //
-    char num1[10];
-    char num2[10];
-    dtostrf(energy, 5, 2, num1);
-    dtostrf((energy/maxEnergy)*100, 5, 1, num2);
-    lcd.print(num1); lcd.print(" kWh ");
-    lcd.print(num2); lcd.print("%");
-    delay(2000);
- // }
+//    char num1[10];
+//    char num2[10];
+//    dtostrf(energy, 5, 2, num1);
+//    dtostrf((energy/maxEnergy)*100, 5, 1, num2);
+//    lcd.print(num1); lcd.print(" kWh ");
+//    lcd.print(num2); lcd.print("%");
+//      lcd.print("Pump  is  OFF     ");
+//      delay(1000);
+  }
 //
 //  Print Boiler % if Running
 //
@@ -389,17 +419,22 @@ void loop() {
 //  
   if (boilerLevel > 0.9)
   {
-    char string[30];
+//    char string[30];
 //    sprintf(string, "Boiler ON   %2d%%", (int)(boilerPercent));
-      sprintf(string, "Boil %2d%% Cap %2d%%", (int)(boilerPercent),(int)((energy/maxEnergy)*100)); // this line was changed to replace "255.0f" with calc value
-      lcd.print(string);
-//    lcd.print ("                ");
-//    lcd.setCursor(0,1);
-//    lcd.print("Boiler ");
-//    lcd.print(boilerPercent);
-//    lcd.print("%");
-//    delay(2000);
+//      sprintf(string, "Boil %2d%% Cap %2d%%", (int)(boilerPercent),(int)((energy/maxEnergy)*100)); // this line was changed to replace "255.0f" with calc value
+//      lcd.clear();
+//      lcd.print(string);
+      lcd.setCursor(0,1);
+      lcd.print("Boiler ON       ");
+      lcd.setCursor(10,1);
+      lcd.print(int(boilerPercent));
+      lcd.print("%");
+//      delay(1000);
   }
+  else
+   {
+//      lcd.print("Boiler is OFF   ");
+   }
 //
 // Initialise values for smoothed temperature acquisition
 //
