@@ -51,6 +51,10 @@
   14/10/2015 - Added Watchdog function
   15/10/2015 - Updated datalogging serial output for easy Excel Import. Also changed boiler PID loop to control on total estimated energy % (not middleTemp)
   17/10/2015 - Added routine to add Integration paramenter to Pump PID if the distance from the setpoint temperature is less that 0.5C (to kill any persistent error)
+  26/10/2015 - Lots of minor changes and tidying, especially re data types. Also increased energy capacity from 7.5 to 7.6 kWh  Increased minimum pump PWM value to 100 (to overcome sticktion)
+                and added IF to set pump to zero if topTemp below Setpoint. Added IF to stop "Mins to Full" displaying if cylinder already full.
+  31/10/2015 - Simplified energy formula and made sure all elements are floats. Also changed Low Temp warning to work from the %energy (rather than middleTemp). Consolidated variable 
+                used for Low Temp alarm and boiler setpoint - now both use boilerRelaySetpoint
  */
 // include the library code:-
 #include <avr/wdt.h> // WATCHDOG 
@@ -61,7 +65,7 @@ LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Set the LCD I
 //
 boolean onboardLED; // define flag for onboard LED status.Onboard LED used to give a 'heartbeat' that toggles each run of main loop
 //
-int boilerActive; // used in datalogging to show whether boiler is on (50 = ON, 0 = OFF)
+int boilerActive; // used in datalogging to show whether boiler is actually turned on via relay (50 = ON, 0 = OFF)
 const int bottomTempPin = 8; // analog pin for bottom transducer
 const int middleTempPin = 9; // analog pin for middle transducer
 const int topTempPin = 10; // analog pin for top transducer
@@ -71,14 +75,14 @@ const int fullLEDPin = 33; // Pin for driving LED indicating that Cylinder is 'f
 const int pumpLEDPin = 35; // Pin for driving pump active LED
 const int meterPin = 9; //PWM pin for 'fuel gauge' (NOT CURRENTLY USED)
 const int relayPin = 11; // Pin used to drive Central Heating Relay
-const int lowAlarm = 41; // % of energy below which warning is displayed
+//const float lowAlarm = 67.0; // % of energy below which warning is displayed
 const int immersionPin = 44; // Pin used for Immersion ON / OFF Relay
 //
 double Setpoint; //define Destratification pump PID setpoint variable
-double pumpSpeed = 0; //initialise pump PWM output variable
-double minPumpSpeed = 0; //minimum PWM value to be used for pump
+double minPumpSpeed = 100; //minimum PWM value to be used for pump
+double pumpSpeed = minPumpSpeed; //initialise pump PWM output variable
 double maxPumpSpeed = 255; //maximum PWM value available
-double boilerLevel = 0; //initialise boiler PID output variable
+double boilerLevel = 255; //initialise boiler PID output variable
 //
 int topADCValue = 0; //variable to store ADC value
 int middleADCValue = 0; //variable to store ADC value
@@ -89,61 +93,70 @@ int flashCountE = 0; //Used to flash function to indicate energy level
 // Set up Temperature Smoothing and Averaging variables
 //
 double numberTempSamples = 5; // number of temperature samples used in rolling average calculation
-int tempSampleInterval = 20000; // Interval (mS) between successive rolling average calculations
-int lastTempSample; // 'Millis' reading when last rolling average samples were calculated
+unsigned long tempSampleInterval = 20000; // Interval (mS) between successive rolling average calculations
+unsigned long lastTempSample; // 'Millis' reading when last rolling average samples were calculated
 unsigned long immersionSwitchInterval = 300000; // minimum time allowed between switches of Immersion Heater control relay
 unsigned long lastImmersionSwitch; // Used to store time Immersion Relay was last switched
-float averageTopTemp = 50;
-float averageMiddleTemp = 45;
-float averageBottomTemp = 40;
-float newAverageTopTemp = 50;
-float newAverageMiddleTemp = 45;
-float newAverageBottomTemp = 40;
+float averageTopTemp = 50.0;
+float averageMiddleTemp = 45.0;
+float averageBottomTemp = 40.0;
+float newAverageTopTemp = 50.0;
+float newAverageMiddleTemp = 45.0;
+float newAverageBottomTemp = 40.0;
 //
-int smoothNo = 6; // Number of loops used in temp sensor smoothing
-const int smoothTime = 20; // mS delay between each smoothing ADC sample
+const int smoothNo = 6; // Number of loops used in temp sensor smoothing
+unsigned long smoothTime = 20; // mS delay between each smoothing ADC sample
 int count = 0; //loop counter for temperature measurement smoothing
 //
-double smoothTopTemp;
-double smoothMiddleTemp;
-double smoothBottomTemp;
-double topTemp = 50;
-double middleTemp = 45;
-double bottomTemp = 40;
-double relaySetPoint = 67; // % energy value at which relay will be energised and prevent further gas heating of the water
-double energy; // Variable to hold calculated energy above 15C that gives an indication of the total heat in the cylinder
-double lastEnergyPercent; // Used to stop repeated lines being output to serial monitor
+float smoothTopTemp;
+float smoothMiddleTemp;
+float smoothBottomTemp;
+double topTemp = 50.0;
+float middleTemp = 45.0;
+float bottomTemp = 40.0;
+double boilerRelaySetpoint = 67.0; // % energy value above which relay will be energised and prevent further gas heating of the water
+float energy; // Variable to hold calculated energy above 15C that gives an indication of the total heat in the cylinder
+float lastEnergyPercent; // Used to stop repeated lines being output to serial monitor
 float boilerPercent;
-float maxEnergy = 7.5; // total capacity of the cylinder in kWh - used to trip immersion heater relay
+float maxEnergy = 7.6; // total capacity of the cylinder in kWh - used to trip immersion heater relay
 const unsigned nRecentEnergies = 40; //Number of recent energy values to store. MUST BE EVEN.
 float recentEnergies[nRecentEnergies]; // Create array to store energy readings
 unsigned recentEnergiesIndex = 0; // initialise pointer to energy array
-unsigned recentEnergiesInterval = 15000; // time between successive energy readings (ms)
+unsigned long recentEnergiesInterval = 12000; // time between successive energy readings (ms)
 float newAverageEnergy = 0.0f; // variable to store calculated value of most recent energy average
 float oldAverageEnergy = 0.0f; // variable to store calculated value of earlier energy average
 float energyGradient = 0.0f; // variable to store calculated rate of change in energy over time 
 const float deltaTime = (float)nRecentEnergies * 0.5f * (float)recentEnergiesInterval; // time between old and new average energy measurements - used to calculate the gradient
-unsigned elapsedMillis = 0; // to allow millis function to be used to time sampling rate
-unsigned newMillis = 0; // as above
+unsigned long elapsedMillis = 0; // to allow millis function to be used to time sampling rate
+unsigned  long newMillis = 0; // as above
 float hoursUntilFull = 1.0f / 0.0f;
 unsigned long windowSize = 600000; // value for relay control window size
 unsigned long windowStartTime; //used for relay control
 unsigned long now; // used for boiler relay on-time calc
 unsigned long boilerOn = 0; // value used to store scaled version of boiler demand level
-double energyPercent = 80; // variable to hold % boiler level
+double energyPercent = 80.0; // variable to hold % boiler level
 //
 // Function to ConvertADC Values to Degrees C
 //
 float calcTempFromReadValue(int readValue);
-void flashLED(); //function to flash LED on Arduino board
-// initialize the pump PID Loop
+//
+// Function to flash Pump LED to indicate % running
+//
+void flashLED();
+//
+// Initialize the pump PID Loops
+//
 PID myPID(&topTemp, &pumpSpeed, &Setpoint,100,0,0, REVERSE); // PID for Pump Control
-// initialize the Boiler PID Loop
-PID boilerPID(&energyPercent, &boilerLevel, &relaySetPoint, 0.5, 0, 0, DIRECT); // error (degrees) * P = boilerLevel value
+//
+// Initialize the Boiler PID Loop
+//
+PID boilerPID(&energyPercent, &boilerLevel, &boilerRelaySetpoint, 0.5, 0, 0, DIRECT); // error (degrees) * P = boilerLevel value
 //
 void setup() {
-  wdt_enable(WDTO_8S); // WATCHDOG set to maximum of 8 Seconds
+  wdt_enable(WDTO_8S); // WATCHDOG set to maximum available time of 8 Seconds
+  //
   // Set up pins for status LEDs
+  //
   pinMode(pumpLEDPin,OUTPUT);
   pinMode(fullLEDPin,OUTPUT);
   pinMode(offLEDPin,OUTPUT);
@@ -153,22 +166,22 @@ void setup() {
   //
   windowStartTime = millis(); //initialise value for relay control
   //
-  Setpoint = 59; // initilise temperature (in celsius) setpoint for destratification pump PID control algorithm
+  Setpoint = 59.0; // initilise temperature (in celsius) setpoint for destratification pump PID control algorithm
   //
   myPID.SetOutputLimits(minPumpSpeed, maxPumpSpeed); 
-  myPID.SetMode(AUTOMATIC); // turn on the PID loop
+  myPID.SetMode(AUTOMATIC); // turn on the Pump PID loop
   myPID.SetSampleTime(20000); // from PID library - sets sample time to X milliseconds
   //
-  boilerPID.SetMode(AUTOMATIC); // turn on PID loop
+  boilerPID.SetMode(AUTOMATIC); // turn on Boiler PID loop
   //boilerPID.SetOutputLimits(0, windowSize); // Commented Out - since it doesn't seem to work (probably because my windowSize is too big?)
   boilerPID.SetSampleTime(60000); // set sample time to 1 minute (note - this doesn't seem to work?)
   //
-  Serial.begin(9600); //start serial comms
-  lcd.begin(16,2);
-  
-  for(unsigned i = 0; i < nRecentEnergies; ++i) // Initiatise array for storing temperature history (used in rolling average calculation)
+  Serial.begin(9600); // Start serial comms
+  lcd.begin(16,2); // Start LCD Display
+  //
+  for(unsigned i = 0; i < nRecentEnergies; ++i) // Initiatise array for storing energy history (used in rolling average calculation). Set to 50% of maximum
   {
-    recentEnergies[i] = 0.0f;
+    recentEnergies[i] = maxEnergy/2.0;
   }
 }
 void loop() {
@@ -209,12 +222,12 @@ void loop() {
   {
     boilerOn = (windowSize / 255) * boilerLevel; // calc scaled version of boiler demand level
   }
-  if (energyPercent > relaySetPoint) //Override PID if energy > setpoint
+  if (energyPercent > boilerRelaySetpoint) //Override PID if energy > setpoint
   { 
     boilerOn = 0;
     boilerPercent = 0;
   }
-  if ((relaySetPoint - energyPercent) < 1.5) // Routine to introduce "I" component when close to setpoint - to eliminate persistent error
+  if ((boilerRelaySetpoint - energyPercent) < 1.5) // Routine to introduce "I" component when close to setpoint - to eliminate persistent error
   {
     boilerPID.SetTunings(30,0.1,0);
   }
@@ -239,7 +252,7 @@ void loop() {
     Serial.print(", ");
     Serial.print(((energy/maxEnergy)*100));
     Serial.print(", ");
-    Serial.print(pumpSpeed * 100 / (maxPumpSpeed-minPumpSpeed));
+    Serial.print((pumpSpeed - minPumpSpeed) * 100 / (maxPumpSpeed-minPumpSpeed));
     Serial.print(", ");
     Serial.print(boilerPercent);
     Serial.print(", ");
@@ -278,7 +291,7 @@ void loop() {
    } 
   //  
   lcd.setCursor(0,0);
-  if (middleTemp < lowAlarm) // print warning if capacity is < lowAlarm
+  if (energyPercent < boilerRelaySetpoint) // print warning if heat stored is < lowAlarm
   {
      lcd.print("*** WARNING ****");
      lcd.setCursor(0,1); // set to next line
@@ -319,7 +332,7 @@ void loop() {
       lcd.print("**TANK IS FULL**");
       delay(800);
     }
-    if(int(abs(hoursUntilFull * 60.0f)) > 99)  // Display mins up to 2 hours, otherwise general 'warming' or 'cooling' statement
+    if(abs(hoursUntilFull * 60.0f) > 99.0f)  // Display mins up to 99, otherwise general 'warming' or 'cooling' statement
     {
       lcd.setCursor(0,1);
       if(newAverageEnergy > oldAverageEnergy)
@@ -335,11 +348,14 @@ void loop() {
     {
       if(hoursUntilFull > 0.0f)
       {
-        lcd.setCursor(0,1);
-        lcd.print("                ");
-        lcd.setCursor(0,1);
-        lcd.print(int(hoursUntilFull * 60.0f));
-        lcd.print(" mins to Full");
+        if(energy < maxEnergy)
+        {
+          lcd.setCursor(0,1);
+          lcd.print("                ");
+          lcd.setCursor(0,1);
+          lcd.print(int(hoursUntilFull * 60.0f));
+          lcd.print(" mins to Full");
+        }
       }
       else
       {
@@ -358,7 +374,7 @@ void loop() {
   {
       lcd.print("Pump ON         ");
       lcd.setCursor(9,1);
-      lcd.print(int(pumpSpeed * 100.0f / (maxPumpSpeed-minPumpSpeed)));
+      lcd.print(int((pumpSpeed - minPumpSpeed) * 100.0f / (maxPumpSpeed-minPumpSpeed)));
       lcd.print("%");
       delay(800);
   }
@@ -424,7 +440,8 @@ void loop() {
 //
   }
 //
-  energy = ((((topTemp + middleTemp + bottomTemp)/3)-15)*170000*4.183)/3.6/1000000;
+        energy = ((((topTemp + middleTemp + bottomTemp)/3.0)-15.0)) * 0.1975;
+// WAS  energy = ((((topTemp + middleTemp + bottomTemp)/3)-15)*170000.0*4.183)/3.6/1000000.0; before being simplified
 //
   newMillis = millis();
   if(newMillis - elapsedMillis > recentEnergiesInterval)
@@ -452,7 +469,14 @@ void loop() {
 //  Run pump PID and output to pump driver pin
 //
       myPID.Compute();
-      analogWrite(pumpPin,pumpSpeed); 
+      if (topTemp > Setpoint)
+      {
+        analogWrite(pumpPin,pumpSpeed);
+      }
+      else
+      {
+          analogWrite(pumpPin,0);
+      }
 //  
 // Tweak PID values near the setpoint
 //
@@ -499,9 +523,9 @@ void loop() {
   while (flashCount > 0)
   {
     digitalWrite(pumpLEDPin, HIGH);
-    delay(200);
+    delay(150);
     digitalWrite(pumpLEDPin,LOW);
-    delay(200);
+    delay(150);
     flashCount = flashCount - 25.5;
   }
   wdt_reset(); // WATCHDOG Reset
@@ -512,9 +536,9 @@ void flashEnergyLED() // Function to flash pump LED when pump is running. 0 to 1
   while (flashCountE > 0)
   {
     digitalWrite(offLEDPin, HIGH);
-    delay(200);
+    delay(150);
     digitalWrite(offLEDPin,LOW);
-    delay(200);
+    delay(150);
     flashCountE = flashCountE - 10; 
   }
    wdt_reset(); // WATCHDOG Reset
