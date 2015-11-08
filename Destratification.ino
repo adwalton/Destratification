@@ -64,7 +64,7 @@ float boilerRelaySetpoint = 67.0; // % energy value above which relay will be en
 float energy = 5.0; // Variable to hold calculated energy above 15C that gives an indication of the total heat in the cylinder
 float lastEnergyPercent; // Used to stop repeated lines being output to serial monitor
 float boilerPercent = 67.0;
-float boilerProportional = 2.00; //proportional parameter applied to boiler error to give boilerLevel
+float boilerProportional = 0.15; //proportional parameter applied to square of boiler error to give boilerLevel
 float maxEnergy = 7.6; // total capacity of the cylinder in kWh - used to trip immersion heater relay
 const unsigned nRecentEnergies = 40; //Number of recent energy values to store. MUST BE EVEN.
 float recentEnergies[nRecentEnergies]; // Create array to store energy readings
@@ -121,7 +121,7 @@ void setup() {
     lcd.print("   Destrat' 3   ");
     delay(2000);
     lcd.setCursor(0,0); // set to top line
-    lcd.print("Date: 06/11/2015");
+    lcd.print("Date: 07/11/2015");
     delay(2000);
     lcd.setCursor(0,0); 
     lcd.print("Pump Setpoint   ");
@@ -161,7 +161,7 @@ void loop() {
   //
   //Set Gas Central Heating Override Relay
   //
-  boilerPercent = (boilerRelaySetpoint - energyPercent) * boilerProportional; // Calc boilerLevel as % error time proportional weighting
+  boilerPercent = (boilerRelaySetpoint - energyPercent) * (boilerRelaySetpoint - energyPercent) * boilerProportional + 5; // Calc boilerLevel as propotional to square of % error plus offset
 //
 // Data validation on boilerPercent
 //
@@ -169,7 +169,7 @@ void loop() {
     {
       boilerPercent = 10.0;
     }
-  if (boilerPercent > 100.0)
+  if (boilerPercent > 90.0)
     {
       boilerPercent = 100.00;
     }
