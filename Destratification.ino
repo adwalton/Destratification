@@ -89,7 +89,7 @@ float calcTempFromReadValue(int readValue);
 //
 // Function to flash Pump LED to indicate % running
 //
-void flashLED();
+//void flashLED();
 //
 void setup() {
   wdt_enable(WDTO_8S); // WATCHDOG set to maximum available time of 8 Seconds
@@ -110,6 +110,8 @@ void setup() {
   Serial.begin(9600); // Start serial comms
   lcd.begin(16,2); // Start LCD Display
   //
+  // Prime Rolling Average Array with values
+  //
   for(unsigned i = 0; i < nRecentEnergies; ++i) // Initiatise array for storing energy history (used in rolling average calculation). Set to 75% of maximum
   {
     recentEnergies[i] = maxEnergy * 0.75;
@@ -121,7 +123,7 @@ void setup() {
     lcd.print("   Destrat' 3   ");
     delay(2000);
     lcd.setCursor(0,0); // set to top line
-    lcd.print("Date: 07/11/2015");
+    lcd.print("Date: 10/11/2015");
     delay(2000);
     lcd.setCursor(0,0); 
     lcd.print("Pump Setpoint   ");
@@ -151,10 +153,12 @@ void loop() {
     if(energy > maxEnergy)
      {
        digitalWrite(immersionPin,HIGH);
+       digitalWrite(fullLEDPin,HIGH);
      } 
     else
      {
        digitalWrite(immersionPin,LOW);
+       digitalWrite(fullLEDPin,LOW);
      }
    lastImmersionSwitch = millis();
   }
@@ -242,11 +246,13 @@ void loop() {
   { 
     boilerRelayOn = false; // Used in datalogging
     digitalWrite(relayPin,HIGH);
+    digitalWrite(offLEDPin, HIGH); // Extinguish Amber LED
   }
   else 
   {
     boilerRelayOn = true; // Used in datalogging 
     digitalWrite(relayPin,LOW);
+    digitalWrite(offLEDPin, LOW); // Light Amber LED
   } 
   //  
   lcd.setCursor(0,0);
@@ -360,6 +366,7 @@ void loop() {
       lcd.setCursor(15,1);
       lcd.print("+"); // Append space to indicate when boiler relay is actually off
     }
+    delay(800);
   } 
 //
 // Initialise values for smoothed temperature acquisition
@@ -442,7 +449,7 @@ void loop() {
       pumpSpeed = ((topTemp - Setpoint) * pumpProportional) + minPumpSpeed; // pumpSpeed = minPumpSpeed + error time proportional value
       if (pumpSpeed > 254)
       {
-          pumpSpeed = 254;
+          pumpSpeed = 255;
       }
       if (pumpSpeed < 1)
       {
@@ -451,10 +458,12 @@ void loop() {
       if (topTemp > Setpoint)
       {
           analogWrite(pumpPin, pumpSpeed);
+          digitalWrite(pumpLEDPin,HIGH);
       }
       else
       {
           analogWrite(pumpPin,0);
+          digitalWrite(pumpLEDPin,LOW);
       }
 //  
 // Tweak PID values near the setpoint
@@ -468,59 +477,13 @@ void loop() {
 //      myPID.SetTunings(100,0,0); // default values
 //    } 
 //
-      if (pumpSpeed > minPumpSpeed) // flash pump LED when pump is running
-        {
-            digitalWrite(pumpLEDPin,HIGH);
-//          flashLED(); // Turned off to prevent delay that it introduces from crashing the program
-        }
-      else
-        {
-          digitalWrite(pumpLEDPin,LOW);
-        }
-//
-//  Set Cylinder Full LED if required
-//
-    if (energy < maxEnergy)
-    {
-      digitalWrite(fullLEDPin,LOW);
-      flashEnergyLED (); // Flash Amber LED to indicate energy level
-    } // end of energy < max energy 
-    else
-    {
-        // cylinder has reached capacity, so light the full LED
-        digitalWrite(fullLEDPin,HIGH);
-    }
+    wdt_reset(); // WATCHDOG Reset
 } // end of main Loop
 //
 // Function to ConvertADC Values to Degrees C
 //
-  float calcTempFromRead(int readValue) {
+    float calcTempFromRead(int readValue)
+    {
     return ((float)readValue * 500.0f) / 1024.0f;
-  }
- void flashLED() // Function to flash pump LED when pump is running. 0 to 10 flashes according to speed value
-{
-  flashCount = pumpSpeed;
-  while (flashCount > 0)
-  {
-    digitalWrite(pumpLEDPin, HIGH);
-    delay(150);
-    digitalWrite(pumpLEDPin,LOW);
-    delay(150);
-    flashCount = flashCount - 25.5;
-  }
-  wdt_reset(); // WATCHDOG Reset
-} 
-void flashEnergyLED() // Function to flash pump LED when pump is running. 0 to 10 flashes according to speed value
-{
-  flashCountE = ((energy/maxEnergy)*100);
-  while (flashCountE > 0)
-  {
-    digitalWrite(offLEDPin, HIGH);
-    delay(150);
-    digitalWrite(offLEDPin,LOW);
-    delay(150);
-    flashCountE = flashCountE - 10; 
-  }
-   wdt_reset(); // WATCHDOG Reset
-} 
+    }
 
