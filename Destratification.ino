@@ -26,7 +26,7 @@ float Setpoint = 59.0; //define Destratification pump PID setpoint variable and 
 int minPumpSpeed = 100; //minimum PWM value to be used for pump
 int pumpSpeed = minPumpSpeed; //initialise pump PWM output variable
 int maxPumpSpeed = 255; //maximum PWM value available
-float pumpProportional = 40; // proportional parameter 
+float pumpProportional = 40.0; // proportional parameter 
 int boilerLevel = 255; //initialise boiler PID output variable
 boolean boilerRelayOn = false; // Used in datalogging to show whether boiler is actually turned on via relay (60 = ON, 0 = OFF)
 //
@@ -38,7 +38,7 @@ int flashCountE = 0; //Used to flash function to indicate energy level
 //
 // Set up Temperature Smoothing and Averaging variables
 //
-float numberTempSamples = 5; // number of temperature samples used in rolling average calculation
+float numberTempSamples = 5.0; // number of temperature samples used in rolling average calculation
 unsigned long tempSampleInterval = 20000; // Interval (mS) between successive rolling average calculations
 unsigned long lastTempSample; // 'Millis' reading when last rolling average samples were calculated
 unsigned long immersionSwitchInterval = 300000; // minimum time allowed between switches of Immersion Heater control relay
@@ -123,7 +123,7 @@ void setup() {
     lcd.print("   Destrat' 3   ");
     delay(2000);
     lcd.setCursor(0,0); // set to top line
-    lcd.print("Date: 08/12/2015");
+    lcd.print("Date: 30/01/2016");
     delay(2000);
     lcd.setCursor(0,0); 
     lcd.print("Pump Setpoint   ");
@@ -442,52 +442,50 @@ void loop() {
 //
 //  Set Pump Speed
 //
-  if ((topTemp-Setpoint) > 0)
+//  if ((topTemp-Setpoint) > 0)
+  if (topTemp > Setpoint)
   {
-    pumpSpeed = (((topTemp - Setpoint)*(topTemp - Setpoint)) * pumpProportional) + minPumpSpeed; // pumpSpeed = minPumpSpeed + error time proportional value
+    pumpSpeed = 120; // Revised line to apply fixed pump value when TTop is above setpoint
+    analogWrite(pumpPin, pumpSpeed);
+    digitalWrite(pumpLEDPin,HIGH);
+// 
+// pumpSpeed = (((topTemp - Setpoint)*(topTemp - Setpoint)) * pumpProportional) + minPumpSpeed; // pumpSpeed = minPumpSpeed + error times proportional value
+//
   }
   else
   {
     pumpSpeed = 0; 
-  } 
-  if (pumpSpeed > 254)
-  {
-     pumpSpeed = 255;
+    analogWrite(pumpPin, pumpSpeed);
+    digitalWrite(pumpLEDPin,LOW);
   }
-  if (pumpSpeed <= minPumpSpeed)
-  {
-     pumpSpeed = 0;
-  }  
-  if (topTemp > Setpoint)
-  {
-    if (energy < maxEnergy)
-    {   
-      analogWrite(pumpPin, pumpSpeed);
-      digitalWrite(pumpLEDPin,HIGH);
-    }
-    else
-    {
-      analogWrite(pumpPin,0);
-      digitalWrite(pumpLEDPin,LOW);
-    }
-   }
-   else
-   {
-     analogWrite(pumpPin,0);
-     digitalWrite(pumpLEDPin,LOW);
-   }
 //  
-// Tweak PID values near the setpoint
-//
-//    if ((topTemp - Setpoint) < 0.5) // Routine to increase "I" component when close to setpoint - to eliminate persistent error
-//    {
-//      myPID.SetTunings(100,0.1,0); // increased "I" near setpoint
+//  if (pumpSpeed > 254)
+//  {
+//     pumpSpeed = 255;
+//  }
+//  if (pumpSpeed <= minPumpSpeed)
+//  {
+//     pumpSpeed = 0;
+//  }  
+//  if (topTemp > Setpoint)
+//  {
+//    if (energy < maxEnergy)
+//    {   
+//      analogWrite(pumpPin, pumpSpeed);
+//      digitalWrite(pumpLEDPin,HIGH);
 //    }
 //    else
 //    {
-//      myPID.SetTunings(100,0,0); // default values
-//    } 
-//
+//      analogWrite(pumpPin,0);
+//      digitalWrite(pumpLEDPin,LOW);
+//    }
+//   }
+//   else
+//   {
+//     analogWrite(pumpPin,0);
+//     digitalWrite(pumpLEDPin,LOW);
+//   }
+//  
     wdt_reset(); // WATCHDOG Reset
 } // end of main Loop
 //
