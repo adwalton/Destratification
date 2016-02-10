@@ -4,7 +4,7 @@ Destrat'3
 Version without PID
 */
 // include the library code:-
-#include <avr/wdt.h> // WATCHDOG 
+#include <avr/wdt.h> // WATCHDOG Library (part of standard Arduino IDE installation) 
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Set the LCD I2C address
@@ -21,6 +21,7 @@ const int pumpLEDPin = 35; // Pin for driving pump active LED
 const int meterPin = 9; //PWM pin for 'fuel gauge' (NOT CURRENTLY USED)
 const int relayPin = 11; // Pin used to drive Central Heating Relay
 const int immersionPin = 44; // Pin used for Immersion ON / OFF Relay
+const int piezoPin = 37; // Pin used to drive piezo sounder
 //
 float Setpoint = 59.0; //define Destratification pump PID setpoint variable and initilise temperature (in celsius)
 int minPumpSpeed = 100; //minimum PWM value to be used for pump
@@ -92,9 +93,9 @@ float calcTempFromReadValue(int readValue);
 //void flashLED();
 //
 void setup() {
-  wdt_enable(WDTO_8S); // WATCHDOG set to maximum available time of 8 Seconds
+  wdt_enable(WDTO_4S); // Set WATCHDOG (maximum POSSIBLE time is 8 Seconds)
 //
-// Set up pins for status LEDs and Relays
+// Set up pins for status LEDs, Relays and piezo sounder
 //
   pinMode(pumpLEDPin,OUTPUT);
   pinMode(fullLEDPin,OUTPUT);
@@ -102,6 +103,7 @@ void setup() {
   pinMode(13,OUTPUT); // onboard LED
   pinMode(relayPin,OUTPUT);
   pinMode(immersionPin,OUTPUT);
+  pinMode(piezoPin,OUTPUT);
 //
   digitalWrite(relayPin,HIGH); // Turn off boiler relay in first instance
 //
@@ -121,22 +123,34 @@ void setup() {
   //
     lcd.setCursor(0,0); // set to top line
     lcd.print("   Destrat' 3   ");
+    tone(piezoPin,500,2000);
     delay(2000);
+    noTone(piezoPin);
+    wdt_reset(); // WATCHDOG Reset
     lcd.setCursor(0,0); // set to top line
-    lcd.print("Date: 30/01/2016");
+    lcd.print("Date: 10/02/2016");
+    tone(piezoPin,1000,2000);
     delay(2000);
+    noTone(piezoPin);
+    wdt_reset(); // WATCHDOG Reset
     lcd.setCursor(0,0); 
     lcd.print("Pump Setpoint   ");
     lcd.setCursor(5,1);
     lcd.print(Setpoint);
     lcd.print("C");
+    tone(piezoPin,1500,2000);
     delay(2000);
+    noTone(piezoPin);
+    wdt_reset(); // WATCHDOG Reset
     lcd.setCursor(0,0); 
-    lcd.print("Boilr Setpoint");
+    lcd.print("Boiler Setpoint");
     lcd.setCursor(5,1);
     lcd.print(boilerRelaySetpoint);
     lcd.print("%");
+    tone(piezoPin,2000,2000);
     delay(2000);
+    noTone(piezoPin);
+    wdt_reset(); // WATCHDOG Reset
 }
 void loop() {
 //
@@ -333,11 +347,11 @@ void loop() {
   delay(800);
   lcd.setCursor(0,1); // Set to second line
 //  
-  if (pumpSpeed > minPumpSpeed)
+  if (pumpSpeed >= minPumpSpeed)
   {
     lcd.print("Pump ON         ");
     lcd.setCursor(9,1);
-    lcd.print(int((pumpSpeed - minPumpSpeed) * 100 / (maxPumpSpeed-minPumpSpeed)));
+    lcd.print(int(((pumpSpeed + 10) - minPumpSpeed) * 100 / (maxPumpSpeed-minPumpSpeed))); // "+ 10" offset to ensure 0% isn't displayed when pump is running slowly
     lcd.print("%");
     delay(800);
   }
@@ -445,12 +459,10 @@ void loop() {
 //  if ((topTemp-Setpoint) > 0)
   if (topTemp > Setpoint)
   {
-    pumpSpeed = 120; // Revised line to apply fixed pump value when TTop is above setpoint
+//    pumpSpeed = 120; // Revised line to apply fixed pump value when TTop is above setpoint
+    pumpSpeed = (((topTemp - Setpoint)*(topTemp - Setpoint)) * pumpProportional) + minPumpSpeed; // pumpSpeed = minPumpSpeed + error times proportional value
     analogWrite(pumpPin, pumpSpeed);
     digitalWrite(pumpLEDPin,HIGH);
-// 
-// pumpSpeed = (((topTemp - Setpoint)*(topTemp - Setpoint)) * pumpProportional) + minPumpSpeed; // pumpSpeed = minPumpSpeed + error times proportional value
-//
   }
   else
   {
