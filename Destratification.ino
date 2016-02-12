@@ -84,6 +84,12 @@ unsigned long now; // used for boiler relay on-time calc
 unsigned long boilerOn = 0; // value used to store scaled version of boiler demand level
 float energyPercent = 100.0; // variable to hold % energy level
 //
+// Set up variables for timing main loop and hence checking whether Watchdog reset should be forced
+//
+unsigned long minLoopTimeAllowed = 2023; // minimum allowed duration of main loop - if actual loop time is shorter a Watchdog reset is forced
+unsigned long lastLoopTime = millis(); // initialise time of last main loop
+//
+//
 // Function to ConvertADC Values to Degrees C
 //
 float calcTempFromReadValue(int readValue);
@@ -109,7 +115,7 @@ void setup() {
 //
   windowStartTime = millis(); //initialise value for relay control
 //
-//  Serial.begin(9600); // Start serial comms
+  Serial.begin(9600); // Start serial comms
   lcd.begin(16,2); // Start LCD Display
   //
   // Prime Rolling Average Array with values
@@ -128,7 +134,7 @@ void setup() {
     noTone(piezoPin);
     wdt_reset(); // WATCHDOG Reset
     lcd.setCursor(0,0); // set to top line
-    lcd.print("Date: 10/02/2016");
+    lcd.print("Date: 12/02/2016");
     tone(piezoPin,1000,2000);
     delay(2000);
     noTone(piezoPin);
@@ -470,35 +476,13 @@ void loop() {
     analogWrite(pumpPin, pumpSpeed);
     digitalWrite(pumpLEDPin,LOW);
   }
-//  
-//  if (pumpSpeed > 254)
-//  {
-//     pumpSpeed = 255;
-//  }
-//  if (pumpSpeed <= minPumpSpeed)
-//  {
-//     pumpSpeed = 0;
-//  }  
-//  if (topTemp > Setpoint)
-//  {
-//    if (energy < maxEnergy)
-//    {   
-//      analogWrite(pumpPin, pumpSpeed);
-//      digitalWrite(pumpLEDPin,HIGH);
-//    }
-//    else
-//    {
-//      analogWrite(pumpPin,0);
-//      digitalWrite(pumpLEDPin,LOW);
-//    }
-//   }
-//   else
-//   {
-//     analogWrite(pumpPin,0);
-//     digitalWrite(pumpLEDPin,LOW);
-//   }
-//  
     wdt_reset(); // WATCHDOG Reset
+    lastLoopTime = millis() - now; // reset main loop timer and then test it's value
+    Serial.println(lastLoopTime); 
+    if (lastLoopTime < minLoopTimeAllowed)
+    {
+      delay(5000); // Add delay > Watchdog reset time, so that it forces a reset
+    }
 } // end of main Loop
 //
 // Function to ConvertADC Values to Degrees C
