@@ -34,43 +34,43 @@ boolean boilerRelayOn = false; // Used in datalogging to show whether boiler is 
 int topADCValue = 0; //variable to store ADC value
 int middleADCValue = 0; //variable to store ADC value
 int bottomADCValue = 0; //variable to store ADC value
-int flashCount = 0; // Used in flash function to indicate pump speed
-int flashCountE = 0; //Used to flash function to indicate energy level
+//int flashCount = 0; // Used in flash function to indicate pump speed
+//int flashCountE = 0; //Used to flash function to indicate energy level
 //
 // Set up Temperature Smoothing and Averaging variables
 //
-float numberTempSamples = 5.0; // number of temperature samples used in rolling average calculation
-unsigned long tempSampleInterval = 20000; // Interval (mS) between successive rolling average calculations
+float numberTempSamples = 20.0; // number of temperature samples used in rolling average calculation
+unsigned long tempSampleInterval = 2000; // Interval (mS) between successive rolling average calculations
 unsigned long lastTempSample; // 'Millis' reading when last rolling average samples were calculated
 unsigned long immersionSwitchInterval = 300000; // minimum time allowed between switches of Immersion Heater control relay
 unsigned long lastImmersionSwitch; // Used to store time Immersion Relay was last switched
 float averageTopTemp = 59.0;
-float averageMiddleTemp = 45.0;
-float averageBottomTemp = 40.0;
+float averageMiddleTemp = 46.0;
+float averageBottomTemp = 41.0;
 float newAverageTopTemp = 59.0;
-float newAverageMiddleTemp = 45.0;
-float newAverageBottomTemp = 40.0;
+float newAverageMiddleTemp = 46.0;
+float newAverageBottomTemp = 41.0;
 //
-const int smoothNo = 6; // Number of loops used in temp sensor smoothing
-unsigned long smoothTime = 20; // mS delay between each smoothing ADC sample
+const int smoothNo = 100; // Number of loops used in temp sensor smoothing
+unsigned long smoothTime = 1; // mS delay between each smoothing ADC sample
 int count = 0; //loop counter for temperature measurement smoothing
 //
 float smoothTopTemp;
 float smoothMiddleTemp;
 float smoothBottomTemp;
 float topTemp = 59.0;
-float middleTemp = 45.0;
-float bottomTemp = 40.0;
+float middleTemp = 46.0;
+float bottomTemp = 41.0;
 float boilerRelaySetpoint = 66.0; // % energy value above which relay will be energised and prevent further gas heating of the water
 float energy = 7.5; // Variable to hold calculated energy above 15C that gives an indication of the total heat in the cylinder
 float lastEnergyPercent; // Used to stop repeated lines being output to serial monitor
 float boilerPercent = 67.0;
 float boilerProportional = 0.15; //proportional parameter applied to square of boiler error to give boilerLevel
 float maxEnergy = 7.5; // total capacity of the cylinder in kWh - used to trip immersion heater relay
-const unsigned nRecentEnergies = 40; //Number of recent energy values to store. MUST BE EVEN.
+const unsigned nRecentEnergies = 20; //Number of recent energy values to store. MUST BE EVEN.
 float recentEnergies[nRecentEnergies]; // Create array to store energy readings
 unsigned recentEnergiesIndex = 0; // initialise pointer to energy array
-unsigned long recentEnergiesInterval = 12000; // time between successive energy readings (ms)
+unsigned long recentEnergiesInterval = 15000; // time between successive energy readings (ms)
 float newAverageEnergy = 7.5f; // variable to store calculated value of most recent energy average
 float oldAverageEnergy = 7.5f; // variable to store calculated value of earlier energy average
 float energyGradient = 0.0f; // variable to store calculated rate of change in energy over time 
@@ -86,7 +86,7 @@ float energyPercent = 100.0; // variable to hold % energy level
 //
 // Set up variables for timing main loop and hence checking whether Watchdog reset should be forced
 //
-unsigned long minLoopTimeAllowed = 2023; // minimum allowed duration of main loop - if actual loop time is shorter a Watchdog reset is forced
+unsigned long minLoopTimeAllowed = 1900; // minimum allowed duration of main loop - if actual loop time is shorter a Watchdog reset is forced
 unsigned long lastLoopTime = millis(); // initialise time of last main loop
 //
 //
@@ -129,33 +129,34 @@ void setup() {
   //
     lcd.setCursor(0,0); // set to top line
     lcd.print("   Destrat' 3   ");
-    tone(piezoPin,500,2000);
+    tone(piezoPin,500,200);
+//    tone(piezoPin,500,2000);
     delay(2000);
-    noTone(piezoPin);
+//    noTone(piezoPin);
     wdt_reset(); // WATCHDOG Reset
     lcd.setCursor(0,0); // set to top line
-    lcd.print("Date: 12/02/2016");
-    tone(piezoPin,1000,2000);
+    lcd.print("Date: 21/02/2016");
+//    tone(piezoPin,1000,2000);
     delay(2000);
-    noTone(piezoPin);
+//    noTone(piezoPin);
     wdt_reset(); // WATCHDOG Reset
     lcd.setCursor(0,0); 
     lcd.print("Pump Setpoint   ");
     lcd.setCursor(5,1);
     lcd.print(Setpoint);
     lcd.print("C");
-    tone(piezoPin,1500,2000);
+//    tone(piezoPin,1500,2000);
     delay(2000);
-    noTone(piezoPin);
+//    noTone(piezoPin);
     wdt_reset(); // WATCHDOG Reset
     lcd.setCursor(0,0); 
     lcd.print("Boiler Setpoint");
     lcd.setCursor(5,1);
     lcd.print(boilerRelaySetpoint);
     lcd.print("%");
-    tone(piezoPin,2000,2000);
+//    tone(piezoPin,2000,2000);
     delay(2000);
-    noTone(piezoPin);
+//    noTone(piezoPin);
     wdt_reset(); // WATCHDOG Reset
 }
 void loop() {
@@ -172,7 +173,7 @@ void loop() {
   now = millis();
   if (now - lastImmersionSwitch > immersionSwitchInterval)
    { 
-    if(energy > maxEnergy)
+    if(energy >= maxEnergy)
      {
         digitalWrite(immersionPin,HIGH);
         digitalWrite(fullLEDPin,HIGH);
@@ -305,50 +306,54 @@ void loop() {
   lcd.setCursor(0,1);
   lcd.print(" Energy =       ");
   lcd.setCursor(10,1);
+//  lcd.print(energyPercent);
   lcd.print(int(energyPercent));
   lcd.print("%");
   delay(800);
-//
-//  if(energy >= maxEnergy)
-//  {
-//      lcd.setCursor(0,0);
-//      lcd.print("**TANK IS FULL**");
-//      delay(800);
-//  }
-  if(abs(hoursUntilFull * 60.0f) > 99.0f)  // Display mins up to 99, otherwise general 'warming' or 'cooling' statement
+
+  if(energy >= maxEnergy)
   {
-    lcd.setCursor(0,1);
-    if(newAverageEnergy > oldAverageEnergy)
-    {
-      lcd.print(" WARMING Slowly ");
-    }
-    else
-    {
-      lcd.print(" COOLING Slowly "); 
-    }
+      lcd.setCursor(0,0);
+      lcd.print("**TANK IS FULL**");
+      delay(800);
   }
-  else 
+  else
   {
-    if(hoursUntilFull > 0.0f)
+     if(abs(hoursUntilFull * 60.0f) > 99.0f)  // Display mins up to 99, otherwise general 'warming' or 'cooling' statement
     {
-      if(energy < maxEnergy)
+      lcd.setCursor(0,1);
+      if(newAverageEnergy > oldAverageEnergy)
+      {
+        lcd.print(" WARMING Slowly ");
+      }
+      else
+      {
+        lcd.print(" COOLING Slowly "); 
+      }
+    }
+    else 
+    {
+      if(hoursUntilFull > 0.0f)
+      {
+        if(energy < maxEnergy)
+        {
+          lcd.setCursor(0,1);
+          lcd.print("                ");
+          lcd.setCursor(0,1);
+          lcd.print(int(hoursUntilFull * 60.0f));
+          lcd.print(" mins to Full");
+        }
+      }
+      else
       {
         lcd.setCursor(0,1);
         lcd.print("                ");
         lcd.setCursor(0,1);
-        lcd.print(int(hoursUntilFull * 60.0f));
-        lcd.print(" mins to Full");
+        lcd.print(abs(int(hoursUntilFull * 60.0f)));
+        lcd.print(" mins to Empty");
       }
     }
-    else
-    {
-      lcd.setCursor(0,1);
-      lcd.print("                ");
-      lcd.setCursor(0,1);
-      lcd.print(abs(int(hoursUntilFull * 60.0f)));
-      lcd.print(" mins to Empty");
-    }
-  }
+ }
 //  
   delay(800);
   lcd.setCursor(0,1); // Set to second line
@@ -357,7 +362,7 @@ void loop() {
   {
     lcd.print("Pump ON         ");
     lcd.setCursor(9,1);
-    lcd.print(int(((pumpSpeed + 10) - minPumpSpeed) * 100 / (maxPumpSpeed-minPumpSpeed))); // "+ 10" offset to ensure 0% isn't displayed when pump is running slowly
+    lcd.print(int(5 + (((pumpSpeed) - minPumpSpeed) * 95 / (maxPumpSpeed-minPumpSpeed)))); // "+ 10" offset to ensure 0% isn't displayed when pump is running slowly
     lcd.print("%");
     delay(800);
   }
@@ -416,7 +421,7 @@ void loop() {
 // Update Rolling Average Temperatures and energy
 //
   newMillis = millis();
-  if (newMillis - lastTempSample > tempSampleInterval)
+  if ((newMillis - lastTempSample) > tempSampleInterval)
   {
     newAverageTopTemp = (averageTopTemp * ((numberTempSamples - 1)/(numberTempSamples))) + (smoothTopTemp / numberTempSamples);
     newAverageMiddleTemp = (averageMiddleTemp * ((numberTempSamples - 1)/(numberTempSamples))) + (smoothMiddleTemp / numberTempSamples);
@@ -438,7 +443,7 @@ void loop() {
 // WAS  energy = ((((topTemp + middleTemp + bottomTemp)/3)-15)*170000.0*4.183)/3.6/1000000.0; before being simplified
 //
     newMillis = millis();
-    if(newMillis - elapsedMillis > recentEnergiesInterval)
+    if((newMillis - elapsedMillis) > recentEnergiesInterval)
     {
       recentEnergies[recentEnergiesIndex] = energy;
       recentEnergiesIndex = (recentEnergiesIndex + 1) % nRecentEnergies;
@@ -465,8 +470,11 @@ void loop() {
 //  if ((topTemp-Setpoint) > 0)
   if (topTemp > Setpoint)
   {
-//    pumpSpeed = 120; // Revised line to apply fixed pump value when TTop is above setpoint
     pumpSpeed = (((topTemp - Setpoint)*(topTemp - Setpoint)) * pumpProportional) + minPumpSpeed; // pumpSpeed = minPumpSpeed + error times proportional value
+    if (pumpSpeed > maxPumpSpeed)
+    {
+      pumpSpeed = maxPumpSpeed;
+    }
     analogWrite(pumpPin, pumpSpeed);
     digitalWrite(pumpLEDPin,HIGH);
   }
